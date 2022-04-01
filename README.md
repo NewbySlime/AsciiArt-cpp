@@ -1,5 +1,5 @@
 # AsciiArt-cpp
-Just a little side project that I make after getting inspired by a youtuber. This program name already says itself, making a Ascii Art from an image (and possibly animated ones and videos if I feel like continuing it). If DirectShow still can use own class, I might already finished the code for videos.
+Just a little side project that I make after getting inspired by a youtuber. This program name already says itself, making a Ascii Art from an image (and possibly animated ones and videos if I feel like continuing it). If DirectShow still can use user own class, I might already finished the code for videos.
 
 ## Inspired by
 https://www.youtube.com/watch?v=55iwMYv8tGI
