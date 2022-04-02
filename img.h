@@ -78,4 +78,12 @@ class BmpOpener{
     ImageData GetImageData();
 };
 
+struct PNGFileData{
+
+};
+
+class PNGOpener{
+
+};
+
 #endif

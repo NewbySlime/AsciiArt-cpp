@@ -93,7 +93,7 @@ void AsciiArt::DrawImage(ImageData **img, int imgnum, float fps){
   long DeltaDurationPerFramems = (long)(1000.0f/fps);
   auto startTime = chrono::high_resolution_clock::now();
 
-  for(int i = 0; i < imgnum && _AsciiArt_KeepDrawing; i++){
+  for(int i = 0; i < imgnum && _AsciiArt_KeepDrawing;){
     ImageData newimg = img[i]->ResizeImage(newWidth, newHeight);
     char *asciibuf = ProcessImage(newimg);
 
@@ -108,8 +108,9 @@ void AsciiArt::DrawImage(ImageData **img, int imgnum, float fps){
     float time = currentTime.count()/1000.f;
     
     printf("Time: %.3fs, Frame %d of %d", time, i+1, imgnum);
+    i = (int)(currentTime.count()/DeltaDurationPerFramems)+1;
 
-    if(i < imgnum-1 && _AsciiArt_KeepDrawing)
+    if(i < imgnum && _AsciiArt_KeepDrawing)
       iomoveup_r(newHeight);
 
     long delta = DeltaDurationPerFramems-(currentTime.count()%DeltaDurationPerFramems);

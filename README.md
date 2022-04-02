@@ -15,5 +15,6 @@ For now, just BMP files.
  * ~~Timing on each frame doesn't match.~~ (done)
 
 ## Not complete
+ * Some compression methods (maybe)
  * APNG, alternative of GIF (after I make PNG opener)
  * Videos (I don't know if I will finish this)

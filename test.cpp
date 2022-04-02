@@ -104,6 +104,10 @@ int main(){
       }
 
       AsciiArt::DrawImage(imgdatas, imgdataslen, framerate);
+      for(int i = 0; i < imgdataslen; i++)
+        delete imgdatas[i];
+      
+      free(imgdatas);
     }
 
     break; default:
