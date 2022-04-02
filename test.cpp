@@ -4,11 +4,19 @@
 #include "conio.h"
 #include "filesystem"
 #include "sstream"
+#include "signal.h"
 
 // minimum filename length (for frames)
 #define MIN_NUM_LENGTH 4
 
+
+void _sig_Siginthand(int signal){
+  AsciiArt::SafeStopDrawing();
+}
+
 int main(){
+  signal(SIGINT, _sig_Siginthand);
+
   std::cout << "Choose what to convert:\n1. Pictures\n2. Frames (pictures from video) (with filename as number starting with 0000 (as like blender rendered pictures))" << std::endl;
   std::cout << "\nFiles extensions currently supported: " << SupportedFileTypeStr << std::endl;
 
@@ -77,7 +85,6 @@ int main(){
 
         std::ifstream ifs{};
         std::string newfilename = folderPath+"/"+newFilename+"."+extensionName;
-        std::cout << "Loading " << newfilename << std::endl;
 
         ifs.open(newfilename);
 

@@ -11,8 +11,8 @@ Use mingw32-make to compile it.
 For now, just BMP files.
 
 ## Bugs that's still makes itself home
- * Escape codes doesn't work for Windows' CMD, I used vscode's powershell.
- * Timing on each frame doesn't match.
+ * ~~Escape codes doesn't work for Windows' CMD, I used vscode's powershell.~~ (done)
+ * ~~Timing on each frame doesn't match.~~ (done)
 
 ## Not complete
  * APNG, alternative of GIF (after I make PNG opener)

@@ -14,14 +14,36 @@ using namespace std;
 const char* AsciiRangeChar = "@#W$9876543210?!abc;:+=-,._                      ";
 const int AsciiRangeCharLen = 50;
 
-CONSOLE_SCREEN_BUFFER_INFO AsciiArt::GetTerminalData(){
-  CONSOLE_SCREEN_BUFFER_INFO bufinfo;
-  GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &bufinfo);
-  return bufinfo;
-}
+
+bool _AsciiArt_KeepDrawing = true;
+
+#ifdef _WIN32
+  int SetupWindows(){
+    if(SetConsoleMode(GetStdHandle(STD_OUTPUT_HANDLE),
+      // ENABLE_VIRTUAL_TERMINAL_PROCESSING | ENABLE_PROCESSED_OUTPUT
+      0x0004 | 0x0001) == 0)
+      {
+      DWORD errcode = GetLastError();
+      cout << "Error setting up console, errcode: 0x" << hex << errcode << dec << endl;
+      exit(errcode);
+    }
+
+    return 0;
+  }
+
+  int __dmp = SetupWindows();
+
+  CONSOLE_SCREEN_BUFFER_INFO AsciiArt::GetTerminalData(){
+    CONSOLE_SCREEN_BUFFER_INFO bufinfo;
+    GetConsoleScreenBufferInfo(GetStdHandle(STD_OUTPUT_HANDLE), &bufinfo);
+    return bufinfo;
+  }
+#endif
 
 void AsciiArt::SetImage(ImageData &img){
-  CONSOLE_SCREEN_BUFFER_INFO consoleInfo = GetTerminalData();
+  #ifdef _WIN32
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo = GetTerminalData();
+  #endif
 
   int newHeight = (int)img.Height*DefaultImageScaleY;
   int newWidth = (int)img.Width*DefaultImageScaleX;
@@ -48,7 +70,11 @@ void AsciiArt::SetImage(ImageData &img){
 
 // this will use the first ImageData as the information about the image
 void AsciiArt::DrawImage(ImageData **img, int imgnum, float fps){
-  CONSOLE_SCREEN_BUFFER_INFO consoleInfo = GetTerminalData();
+  _AsciiArt_KeepDrawing = true;
+
+  #ifdef _WIN32
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo = GetTerminalData();
+  #endif
 
   int newHeight = (int)img[0]->Height*DefaultImageScaleY;
   int newWidth = (int)img[0]->Width*DefaultImageScaleX;
@@ -64,12 +90,10 @@ void AsciiArt::DrawImage(ImageData **img, int imgnum, float fps){
   newHeight = (int)newHeight*ImageScale;
   newWidth = (int)newWidth*ImageScale;
 
-  long DeltaDurationPerFrameus = (long)(1000000.0f/fps);
+  long DeltaDurationPerFramems = (long)(1000.0f/fps);
   auto startTime = chrono::high_resolution_clock::now();
 
-  for(int i = 0; i < imgnum; i++){
-    auto startFrameSec = chrono::high_resolution_clock::now();
-
+  for(int i = 0; i < imgnum && _AsciiArt_KeepDrawing; i++){
     ImageData newimg = img[i]->ResizeImage(newWidth, newHeight);
     char *asciibuf = ProcessImage(newimg);
 
@@ -83,17 +107,17 @@ void AsciiArt::DrawImage(ImageData **img, int imgnum, float fps){
 
     float time = currentTime.count()/1000.f;
     
-    printf("Time: %.3f, Frame %d of %d", time, i+1, imgnum);
+    printf("Time: %.3fs, Frame %d of %d", time, i+1, imgnum);
 
-    if(i < imgnum-1)
+    if(i < imgnum-1 && _AsciiArt_KeepDrawing)
       iomoveup_r(newHeight);
 
-    stopFrameSec = chrono::high_resolution_clock::now();
-    auto CurrentDuration = chrono::duration_cast<chrono::microseconds>(stopFrameSec-startFrameSec);
-    long delta = DeltaDurationPerFrameus-CurrentDuration.count();
-
-    this_thread::sleep_for(chrono::microseconds(delta));
+    long delta = DeltaDurationPerFramems-(currentTime.count()%DeltaDurationPerFramems);
+    this_thread::sleep_for(chrono::milliseconds(delta));
   }
+
+  if(!_AsciiArt_KeepDrawing)
+    cout << "\nStopped." << endl;
 }
 
 
@@ -121,4 +145,8 @@ char* AsciiArt::ProcessImage(ImageData &img){
 
   res[reslen-1] = '\0';
   return res;
+}
+
+void AsciiArt::SafeStopDrawing(){
+  _AsciiArt_KeepDrawing = false;
 }
