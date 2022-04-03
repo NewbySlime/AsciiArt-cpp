@@ -29,9 +29,9 @@ uint16_t algorithm_GetBitsBetween(char *data, uint8_t startAt, uint8_t numberofb
   return (byte2 >> startAt) & (0xffff >> (16-numberofbits));
 }
 
-uint16_t algorithm_GetBitsBetweenR(char *data, uint8_t startAt, uint8_t numberofbits){
+uint16_t algorithm_GetBitsBetweenR(char *data, uint8_t endAt, uint8_t numberofbits){
   uint16_t byte2 = algorithm_GetBitsR(data);
-  return (byte2 >> startAt) & (0xffff >> (16-numberofbits));
+  return (byte2 << endAt) & (0xffff >> (16-numberofbits));
 }
 
 // PNG
@@ -93,42 +93,64 @@ class StaticHuffmanTree{
     static vector<pair<uint8_t, uint16_t>> distanceCodes;
     static vector<pair<uint8_t, int16_t>> lengthCodes;
 
+    static bool isReady;
+
   public:
     StaticHuffmanTree(){}
 
     // if the code is length codes or distance codes,
     // it will return the extra bits.
     // for getting length, use GetExtra
+    // -- first pair --
     // return value -1, means end of block
     // return value < -2, means the extrabits -(val+2)
-    static int16_t _GetLeaf(uint16_t bits, uint8_t bitLength){
-      uint16_t code = bits & (0xffff >> (16-bitLength));
-      uint16_t head = code >> (bitLength-5);
+    // -- second pair --
+    // return how many bits are used
+    static pair<int16_t, uint8_t> GetLeaf(uint16_t bits){
+      uint16_t head = bits >> (16-5);
+      uint16_t bitcount = 0;
+      uint16_t code = 0;
       
-      // literal 0-143
-      if(head >= 0b11001)
-        return (code - 0b110010000) + 0;
-
       // literal 144-255
-      else if(head >= 0b11000)
-        return (code - 0b11000000) + 144;
-
-      // length 257-279
-      else if(head >= 0b00110)
-        return -(lengthCodes[code - 0b00110000].first+2);
-
-      //length 280-285
-      else if(head >= 0b00000){
-        if(code == 0)
-          return -1;
-        
-        return -(lengthCodes[code - 0b0000001 + 23].first+2);
+      if(head >= 0b11001){
+        bitcount = 9;
+        code = bits >> (16-bitcount);
+        return pair<int16_t, uint8_t>{(code - 0b110010000) + 144, bitcount};
       }
 
-      return 0;
+      //length 280-285
+      else if(head >= 0b11000){
+        bitcount = 8;
+        code = bits >> (16-bitcount);
+        return pair<int16_t, uint8_t>{-(lengthCodes[code - 0b11000000].first+2), bitcount};
+      }
+
+      // literal 0-143
+      else if(head >= 0b00110){
+        bitcount = 8;
+        code = bits >> (16-bitcount);
+        return pair<int16_t, uint8_t>((code - 0b00110000) + 0, bitcount);
+      }
+
+      // length 257-279 plus end of block
+      else if(head >= 0b00000){
+        bitcount = 7;
+        code = bits >> (16-bitcount);
+
+        if(code == 0)
+          return pair<int16_t, uint8_t>{-1, 0};
+        
+        // magic number 23 is subtraction of 280 and 257
+        return pair<int16_t, uint8_t>{-(lengthCodes[code - 0b0000001 + 23].first+2), bitcount};
+      }
+
+      return pair<int16_t, uint8_t>{0,0};
     }
 
     static int SetupClass(){
+      if(isReady)
+        return 0;
+
       int i = _StartLengthCode, index = 0, num = _StartLength;
       while(i <= _MaxLengthCode){
         int _n = (int)pow(2, index);
@@ -152,6 +174,10 @@ class StaticHuffmanTree{
 
         index++;
       }
+
+      isReady = true;
+
+      return 0;
     }
 
     // return extra bits, for the distance, use GetExtra
@@ -172,7 +198,7 @@ class StaticHuffmanTree{
 
       // length
       else if(code >= 257 && code <= 285)
-        return lengthCodes[code].second + (extraBits & (0xff >> 8-distanceCodes[code].first));
+        return lengthCodes[code].second + (extraBits & (0xff >> 8-lengthCodes[code].first));
 
       return 0;
     }
@@ -189,7 +215,8 @@ char *algorithm_DEFLATE_decompress(char *data, size_t datasize, int compressionT
   while(keepLooping){
     keepLooping = !algorithm_GetBit(data[0], 0);
 
-    uint8_t HuffmanCodingType = (data[0] >> 1) & 0b11; 
+    uint8_t HuffmanCodingType = (data[0] >> 1) & 0b11;
+    size_t offsetbits = 3;
 
     switch(HuffmanCodingType){
       // no compression
@@ -199,7 +226,23 @@ char *algorithm_DEFLATE_decompress(char *data, size_t datasize, int compressionT
 
       // fixed Huffman coding
       break; case 0b1:{
+        auto res = StaticHuffmanTree::GetLeaf(algorithm_GetBitsR(data+(offsetbits/8)));
         
+        // value is literal
+        if(res.first >= 0){
+
+        }
+
+        // end of block
+        else if(res.first == -1)
+          continue;
+        
+        // value is the count of extra bits
+        else{
+          uint16_t length, distance;
+
+          
+        }
       }
 
       // dynamic Huffman coding
