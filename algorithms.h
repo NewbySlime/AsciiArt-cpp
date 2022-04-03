@@ -17,6 +17,6 @@ uint16_t algorithm_GetBitsR(char *data);
 uint16_t algorithm_GetBitsBetween(char *data, uint8_t startAt, uint8_t numberOfBits);
 // reversed version of algorithm_GetByteBetweenR
 uint16_t algorithm_GetBitsBetweenR(char *data, uint8_t startAt, uint8_t numberOfBits);
-char *algorithm_DEFLATE(char *data, size_t datasize, int compressionType);
+char *algorithm_DEFLATE_decompress(char *data, size_t datasize, int compressionType);
 
-#endif`
+#endif
