@@ -2,38 +2,30 @@
 #include "math.h"
 #include "vectormath.h"
 #include "sstream"
+#include "algorithms.h"
 
 using namespace std;
 
 
-void GetData(istream &bis){
-
-}
-
-template<typename type> void GetData(istream &bis, type* data){
-  char *databyte = reinterpret_cast<char*>(data);
-  bis.read(databyte, sizeof(type));
-}
-
-template<typename t1, typename... t2> void GetData(istream &bis, t1* data, t2*... datas){
-  GetData(bis, data);
-  GetData(bis, datas...);
-}
-
-size_t GetData(char *buf){
+size_t GetData(istream &bis){
   return 0;
 }
 
-// return byte offset
-template<typename type> size_t GetData(char *buf, type* data){
-  memcpy(data, buf, sizeof(type));
+template<typename type> size_t GetData(istream &bis, type* data){
+  char *databyte = reinterpret_cast<char*>(data);
+  bis.read(databyte, sizeof(type));
   return sizeof(type);
 }
 
-template<typename t1, typename... t2> size_t GetData(char *buf, t1* data, t2*... datas){
-  size_t currentOffset = GetData(buf, data);
-  currentOffset += GetData(buf+currentOffset, datas...);
-  return currentOffset;
+template<typename t1, typename... t2> size_t GetData(istream &bis, t1* data, t2*... datas){
+  return GetData(bis, data) +
+  GetData(bis, datas...);
+}
+
+
+constexpr unsigned int CharsToUint32(char *buf){
+  uint32_t res = (buf[0] << (8*3)) | (buf[1] << (8*2)) | (buf[2] << 8) | buf[3];
+  return res;
 }
 
 
@@ -73,6 +65,10 @@ ImageData::ImageData(const BitmapFileData &bmp){
       }
     }
   }
+}
+
+ImageData::ImageData(const PNGFileData &png){
+
 }
 
 ImageData::~ImageData(){
@@ -127,6 +123,7 @@ ImageData ImageData::ResizeImage(ImageData &img, int w, int h){
 }
 
 
+// ** BmpOpener Class ** //
 BmpOpener::BmpOpener(){
 
 }
@@ -147,7 +144,7 @@ int BmpOpener::Open(std::ifstream &ifs, BitmapFileData &bmps, uint16_t idField){
   GetData(ifs, &idfield);
 
   if(idfield != BMP_IDHEAD)
-    return ERR_BMP_WRONGID;
+    return ERR_FILE_WRONGFILE;
   
   GetData(ifs, &bmps.FileSize);
   
@@ -200,10 +197,119 @@ int BmpOpener::Open(std::ifstream &ifs, BitmapFileData &bmps, uint16_t idField){
     bmps.PixelData = pixelData;
 
 
-  return ERR_BMP_SUCCESS;
+  return ERR_FILE_SUCCESS;
 }
-
 
 ImageData BmpOpener::GetImageData(){
   return bmpdat;
+}
+
+
+// ** PNGOpener Class ** //
+PNGOpener::PNGOpener(){
+
+}
+
+int PNGOpener::Open(std::string filepath, uint16_t idField = 0){
+  return Open(filepath, pngdat, idField);
+}
+
+int PNGOpener::Open(std::string filepath, PNGFileData &pngstruct, uint16_t idField = 0){
+  ifstream ifs;
+  ifs.open(filepath);
+  return Open(ifs, pngstruct, idField);
+}
+
+int PNGOpener::Open(std::ifstream &ifs, PNGFileData &pngstruct, uint16_t idField = 0){
+  uint64_t fileSignature = 0;
+  GetData(ifs, &fileSignature);
+
+  if(fileSignature != PNG_IDHEAD)
+    return ERR_FILE_WRONGFILE;
+
+  while(true && ifs.eof()){
+    uint32_t headerChunk = 0, chunkSize = 0, offset = 0;
+    GetData(ifs, &headerChunk, &chunkSize);
+
+    switch(headerChunk){
+      break; case CharsToUint32("IHDR"):{
+        uint8_t Colortype = 0;
+        offset = GetData(ifs,
+          &pngstruct.Width,
+          &pngstruct.Height,
+          &pngstruct.BitDepth,
+          &Colortype,
+          &pngstruct.CompressionMethod,
+          &pngstruct.FilterMethod,
+          &pngstruct.InterlaceMethod
+        );
+
+        pngstruct.BitsPerChannel = Colortype >> 3;
+        pngstruct.Alpha = algorithm_GetBit(Colortype, 2);
+        pngstruct.Truecolor = algorithm_GetBit(Colortype, 1);
+        pngstruct.Palette = algorithm_GetBit(Colortype, 0);
+
+        switch(pngstruct.CompressionMethod){
+          break; case PNG_COMPRESSION_DEFLATE:
+          break; default:
+            return ERR_PNG_UNSUPPORTEDCOMPRESSION;
+        }
+        
+        switch(pngstruct.FilterMethod){
+          break; case PNG_FILTER_DEFAULT:
+          break; default:
+            return ERR_PNG_UNSUPPORTEDFILTER;
+        }
+
+        switch(pngstruct.InterlaceMethod){
+          break; case PNG_INTERLACE_NONE:
+          break; case PNG_INTERLACE_ADAM7:
+          break; default:
+            return ERR_PNG_UNSUPPORTEDINTERLACING;
+        }
+      }
+
+      break; case CharsToUint32("IDAT"):{
+        uint32_t CompressionMethod = 0; // ?
+
+        offset = GetData(ifs,
+          &CompressionMethod,
+          &pngstruct.ZLibFcheck
+        );
+
+        pngstruct.CompressedBlockLen = chunkSize-offset-4;
+        pngstruct.CompressedBlock = new char[pngstruct.CompressedBlockLen];
+        ifs.read(pngstruct.CompressedBlock, pngstruct.CompressedBlockLen);
+
+        offset += pngstruct.CompressedBlockLen;
+
+        uint32_t ZLibChecksum = 0;
+        offset += GetData(ifs, &ZLibChecksum);
+      }
+
+      break; case CharsToUint32("PLTE"):{
+        if(!pngstruct.Palette)
+          break;
+      }
+
+      break; case CharsToUint32("IEND"):
+        return ERR_FILE_SUCCESS;
+
+      break; default:{
+        // cout << "Unsupported ancillary chunks: 0x" << hex << headerChunk << dec << endl;
+      }
+    }
+
+    if(offset < headerChunk)
+      ifs.seekg((size_t)ifs.tellg()+headerChunk-offset);
+
+    uint32_t CRCValue = 0;
+    GetData(ifs, &CRCValue);
+  }
+
+  return ERR_PNG_NOIENDCHUNK;
+}
+
+ImageData PNGOpener::GetImageData(){
+  return pngdat;
 }

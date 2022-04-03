@@ -9,6 +9,8 @@
 
 // ID field of the BMP
 #define BMP_IDHEAD 0x4d42
+// ID field of the PNG
+#define PNG_IDHEAD 0x89504e470d0a1a0a
 
 // Compression method
 #define BI_RGB 0
@@ -20,14 +22,32 @@
 #define COLORD_RGBA8 32
 #define COLORD_RGB8 24
 
+#define PNG_COMPRESSION_DEFLATE 0
+
+#define PNG_FILTER_DEFAULT 0
+
+#define PNG_INTERLACE_NONE 0
+#define PNG_INTERLACE_ADAM7 1
+
+
+#define ERR_FILE_WRONGFILE -1
+#define ERR_FILE_SUCCESS 0
+
 // Error codes when opening bmp files
 #define ERR_BMP_DATANOTSUFFICIENT 1           // ifstream reached EOF before the data is supplied
-#define ERR_BMP_SUCCESS 0
-#define ERR_BMP_WRONGID -1
 #define ERR_BMP_UNSUPPORTEDHEADERINFO -2
 #define ERR_BMP_UNSUPPORTERCOMPRESSION -3
 
+
+#define ERR_PNG_NOIENDCHUNK 1
+#define ERR_PNG_UNSUPPORTEDCOMPRESSION -2
+#define ERR_PNG_UNSUPPORTEDFILTER -3
+#define ERR_PNG_UNSUPPORTEDINTERLACING -4
+#define ERR_PNG_WRONGCOLORTYPE -5
+
+
 struct BitmapFileData;
+struct PNGFileData;
 
 class ImageData{
   public:
@@ -40,6 +60,7 @@ class ImageData{
 
     ImageData();
     ImageData(const BitmapFileData &bmp);
+    ImageData(const PNGFileData &png);
     ImageData(const ImageData &imgdat);
 
     ~ImageData();
@@ -61,7 +82,14 @@ struct BitmapFileData{
     char *PixelData = NULL;
 };
 
-class BmpOpener{
+class ImageOpener{
+  public:
+    ImageOpener(){}
+    virtual int Open(std::string filepath, uint16_t idField = 0){}
+    virtual ImageData GetImageData(){}
+};
+
+class BmpOpener: public ImageOpener{
   private:
     BitmapFileData bmpdat{};
 
@@ -72,18 +100,38 @@ class BmpOpener{
     // and will deleting the last image data used
     // if idField is 0, it will read the header
     int Open(std::string filepath, uint16_t idField = 0);
-    static int Open(std::string filepath, BitmapFileData& bmpstruct, uint16_t idField = 0);
+    static int Open(std::string filepath, BitmapFileData &bmpstruct, uint16_t idField = 0);
     static int Open(std::ifstream &ifs, BitmapFileData &bmpstruct, uint16_t idField = 0);
 
     ImageData GetImageData();
 };
 
 struct PNGFileData{
+  public:
+    uint32_t Width = 0, Height = 0;
+    uint8_t BitDepth = 0, BitsPerChannel = 0, CompressionMethod = 0, FilterMethod = 0, ZLibFcheck = 0, InterlaceMethod = 0;
 
+    bool Truecolor = false, Alpha = false, Palette = false;
+
+    size_t CompressedBlockLen = 0;
+
+    char *PaletteData = NULL;
+    char *CompressedBlock = NULL;
 };
 
-class PNGOpener{
+class PNGOpener: public ImageOpener{
+  private:
+    PNGFileData pngdat{};
 
+  public:
+    PNGOpener();
+
+    // same as BmpOpener
+    int Open(std::string filepath, uint16_t idField = 0);
+    static int Open(std::string filepath, PNGFileData &pngstruct, uint16_t idField = 0);
+    static int Open(std::ifstream &ifs, PNGFileData &pngstruct, uint16_t idField = 0);
+
+    ImageData GetImageData();
 };
 
 #endif
