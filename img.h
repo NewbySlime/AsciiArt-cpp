@@ -119,6 +119,8 @@ struct PNGFileData{
     char *CompressedBlock = NULL;
 };
 
+
+// don't forget to use big endian
 class PNGOpener: public ImageOpener{
   private:
     PNGFileData pngdat{};

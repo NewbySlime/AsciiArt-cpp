@@ -1,5 +1,6 @@
 #include "img.h"
 #include "AsciiArt.h"
+#include "algorithms.h"
 
 #include "conio.h"
 #include "filesystem"
@@ -14,7 +15,25 @@ void _sig_Siginthand(int signal){
   AsciiArt::SafeStopDrawing();
 }
 
+/*
+73 49 4d cb 49 2c 49 55 00 11 00
+*/
+
+int test(){
+  unsigned char ch[]{
+    0xcb, 0x48, 0xcd, 0xc9, 0xc9, 0x57, 0xc8, 0x40, 0x27, 0xb9, 0
+  };
+
+  auto res = algorithm_DEFLATE_decompress(reinterpret_cast<char*>(ch), 11, 0);
+
+  fwrite(res.first, sizeof(char), res.second, stdout);
+
+  exit(0);
+}
+
 int main(){
+  test();
+
   signal(SIGINT, _sig_Siginthand);
 
   std::cout << "Choose what to convert:\n1. Pictures\n2. Frames (pictures from video) (with filename as number starting with 0000 (as like blender rendered pictures))" << std::endl;
@@ -30,10 +49,10 @@ int main(){
       BmpOpener bmp;
       int errcode = bmp.Open(datapath);
 
-      if(errcode != ERR_BMP_SUCCESS){
+      if(errcode != ERR_FILE_SUCCESS){
         std::cout << "Error opening file: ";
         switch(errcode){
-          break; case ERR_BMP_WRONGID:
+          break; case ERR_FILE_WRONGFILE:
             std::cout << "Not a bmp file." << std::endl;
           
           break; default:

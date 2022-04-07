@@ -23,7 +23,7 @@ template<typename t1, typename... t2> size_t GetData(istream &bis, t1* data, t2*
 }
 
 
-constexpr unsigned int CharsToUint32(char *buf){
+constexpr unsigned int CharsToUint32(const char *buf){
   uint32_t res = (buf[0] << (8*3)) | (buf[1] << (8*2)) | (buf[2] << 8) | buf[3];
   return res;
 }
@@ -210,17 +210,17 @@ PNGOpener::PNGOpener(){
 
 }
 
-int PNGOpener::Open(std::string filepath, uint16_t idField = 0){
+int PNGOpener::Open(std::string filepath, uint16_t idField){
   return Open(filepath, pngdat, idField);
 }
 
-int PNGOpener::Open(std::string filepath, PNGFileData &pngstruct, uint16_t idField = 0){
+int PNGOpener::Open(std::string filepath, PNGFileData &pngstruct, uint16_t idField){
   ifstream ifs;
   ifs.open(filepath);
   return Open(ifs, pngstruct, idField);
 }
 
-int PNGOpener::Open(std::ifstream &ifs, PNGFileData &pngstruct, uint16_t idField = 0){
+int PNGOpener::Open(std::ifstream &ifs, PNGFileData &pngstruct, uint16_t idField){
   uint64_t fileSignature = 0;
   GetData(ifs, &fileSignature);
 
