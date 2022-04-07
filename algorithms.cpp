@@ -564,6 +564,7 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
         size_t maxoffsetbits = datasize*8;
 
         // code length parts
+        // change here
         uint8_t *litlenArr = (uint8_t*)calloc(_StopLengthCode, 1);
         uint16_t offsetlitlen = 0;
         while(offsetbits < maxoffsetbits){
@@ -581,24 +582,18 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
                 algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, extrabits), extrabits)
               );
 
-              uint8_t copyCode = 
-
-              if(val == 16){
-                uint8_t previousBitLength = litlenArr[offsetlitlen-1];
-                for(int i = 0; i < length; i++)
-                  litlenArr[offsetlitlen++] = previousBitLength;
-
-              }
-
-              else{
-                for(int i = 0; i < length; i++)
-                  litlenArr[offsetlitlen++] = 0;
-
-              }
+              uint8_t copyCode = val == 16? litlenArr[offsetlitlen-1]: 0;
+              
+              for(int i = 0; i < length; i++)
+                litlenArr[offsetlitlen++] = copyCode;
             }
           }
 
           offsetbits++;
+        }
+        
+        while(offsetbits < maxoffsetbits){
+          bool currentBi 
         }
 
         free(codeLengthArr);
