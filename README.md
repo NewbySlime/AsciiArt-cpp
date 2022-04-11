@@ -6,6 +6,7 @@ https://www.youtube.com/watch?v=55iwMYv8tGI
 
 ## Compiling
 Use mingw32-make to compile it.
+If want to use logging features, compile with `main-log` target.
 
 ## Supported file formats
 For now, just BMP files.

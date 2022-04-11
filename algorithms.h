@@ -7,9 +7,9 @@
 #define ALGORITHM_DEFLATETYPE_PNG 0
 
 
-bool algorithm_GetBit(char data, uint8_t index);
+template<typename datatype> bool algorithm_GetBit(datatype data, uint8_t index);
 // reversed version of algorithm_GetBit
-bool algorithm_GetBitR(char data, uint8_t index);
+template<typename datatype> bool algorithm_GetBitR(datatype data, uint8_t index);
 
 uint32_t algorithm_GetBitsR(char *data);
 

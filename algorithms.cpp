@@ -5,6 +5,7 @@
 #include "map"
 #include "math.h"
 
+#include "log.h"
 #include "iostream"
 
 using namespace std;
@@ -13,9 +14,9 @@ template<typename t_num> bool algorithm_GetBit(t_num data, uint8_t index){
   return (data >> index) & 0b1;
 }
 
-template<typename t_num> bool algorithm_GetBitR(t_num data, uint8_t index){
-  return (data >> (8-index)) & 0b1;
-}
+template bool algorithm_GetBit(char, uint8_t);
+template bool algorithm_GetBit(unsigned char, uint8_t);
+
 
 template<typename num> num algorithm_GetBitsR(char *data){
   num res = 0;
@@ -95,6 +96,8 @@ class StaticHuffmanTree{
 
   public:
     StaticHuffmanTree(){
+      PRINTLOG("Setting up static Huffman tree...\n\nLength codes,");
+
       int i = _StartLengthCode, index = 0, num = _StartLength;
       while(index+1 < (sizeof(_Lengthcode)/sizeof(_Lengthcode[0]))){
         if(_Lengthcode[index] < 0){
@@ -106,7 +109,7 @@ class StaticHuffmanTree{
           int _n = (int)pow(2, index);
           for(int n = 0; n < (_Lengthcode[index+1]-_Lengthcode[index]); n++){
             lengthCodes.push_back(pair<uint8_t, uint16_t>{index, num});
-          printf("code %d, extrabits %d, startlen %d\n", i, index, num);
+            PRINTLOG("\tCode %d, extrabits %d, baseLength %d\n", i, index, num);
             num += _n;
             i++;
           }
@@ -115,17 +118,22 @@ class StaticHuffmanTree{
         index++;
       }
 
+      PRINTLOG("\n\nDistance codes,\n");
+
       i = _StartDistanceCode; index = 0; num = _StartDistance;
       while(index+1 < (sizeof(_Distancecode)/sizeof(_Distancecode[0]))){
         int _n = (int)pow(2, index);
         for(int n = 0; n < (_Distancecode[index+1]-_Distancecode[index]); n++){
           distanceCodes.push_back(pair<uint8_t, int16_t>{index, num});
+          PRINTLOG("\tCode %d, extrabits %d, baseDistance %d\n", i, index, num);
           num += _n;
           i++;
         }
 
         index++;
       }
+
+      PRINTLOG("\nDone setting up static tree.\n\n");
     }
 
     // if the code is length codes or distance codes,
@@ -236,13 +244,23 @@ struct tree{
             return;
           }
 
-          leaf *newleaf = new leaf{};
-          if(algorithm_GetBit<uint16_t>(code, bitLength))
-            right = newleaf;
-          else
-            left = newleaf;
-          
-          newleaf->SetLeaf(code, val, bitLength-1);
+          leaf *currleaf;
+          if(algorithm_GetBit<uint16_t>(code, bitLength-1)){
+            PRINTLOG("1");
+            if(right == NULL)
+              right = new leaf{};
+            
+            currleaf = right;
+          }
+          else{
+            PRINTLOG("0");
+            if(left == NULL)
+              left = new leaf{};
+
+            currleaf = left;
+          }
+
+          currleaf->SetLeaf(code, val, bitLength-1);
         }
     };
 
@@ -258,6 +276,7 @@ struct tree{
 
     // bitCountOfTheCodes already sorted based on index
     void SetCode(uint8_t *bitCountOfTheCodes, uint16_t arraylength){
+      PRINTLOG("\nSetting up tree...\n");
       vector<uint16_t> bitlengthcount{}, nextcode{};
       uint8_t maxBitsLength = 0;
 
@@ -269,8 +288,8 @@ struct tree{
         if(currentBitLength > maxBitsLength)
           maxBitsLength = currentBitLength;
 
-        if(bitlengthcount.size() > currentBitLength)
-          bitlengthcount.insert(bitlengthcount.end(), i-bitlengthcount.size(), 0);
+        if(bitlengthcount.size() < currentBitLength)
+          bitlengthcount.insert(bitlengthcount.end(), currentBitLength-bitlengthcount.size(), 0);
 
         bitlengthcount[currentBitLength-1]++;
       }
@@ -280,18 +299,25 @@ struct tree{
       uint16_t code = 0;
       bitlengthcount[0] = 0;
       for(int bitsl = 1; bitsl <= maxBitsLength; bitsl++){
-        code = (code + bitlengthcount[bitsl-1]) << 1;
-        nextcode[bitsl-1] = code;
+        // added ifs here, not from the rfc specified
+        if(bitlengthcount[bitsl-1] != 0){
+          code = (code + bitlengthcount[bitsl-1]) << 1;
+          nextcode[bitsl-1] = code;
+        }
       }
 
       for(int i = 0; i < arraylength; i++){
         int currentBitLength = bitCountOfTheCodes[i];
         if(currentBitLength != 0){
           // assign the code
+          PRINTLOG("\tcode val: %d, codewords: ", i);
           firstleaf->SetLeaf(nextcode[currentBitLength-1], i, currentBitLength);
+          PRINTLOG("\n");
           nextcode[currentBitLength-1]++;
         }
       }
+
+      currentleaf = firstleaf;
     }
 
     // this will iterate each leaf using the bits
@@ -331,68 +357,70 @@ class HuffmanTree{
     tree _codeLengthTree, _litlenTree, _distTree;
 
   public:
+    enum TreeType{
+      CodeLength,
+      Litlen,
+      Distance
+    };
+
     HuffmanTree(){}
 
-    // the array length has to be 19 or _StopCodeLengthCode
-    void SetCodeLength(uint8_t *bitCountOfTheCodes){
-      _codeLengthTree.SetCode(bitCountOfTheCodes, _StopCodeLengthCode);
+
+    // for CodeLength, the array length has to be 19 or _StopCodeLengthCode
+    // for Literal/Length, the array length has to be 284 or _StopLengthCode
+    // for Distance, the array length has to be 30 or _StopDistanceCode
+    void SetCode(uint8_t *bitCountArr, TreeType type){
+      switch(type){
+        break; case CodeLength:
+          _codeLengthTree.SetCode(bitCountArr, _StopCodeLengthCode);
+        
+        break; case Litlen:
+          _litlenTree.SetCode(bitCountArr, _StopLengthCode);
+        
+        break; case Distance:
+          _distTree.SetCode(bitCountArr, _StopDistanceCode);
+      }
     }
 
-    // the array length has to be 284 or _StopLengthCode
-    void SetLitLen(uint8_t *litlenBitCount){
-      _litlenTree.SetCode(litlenBitCount, _StopLengthCode);
-    }
+    const tree::leaf* GetLeaf(bool bit, TreeType type){
+      switch(type){
+        break; case CodeLength:
+          return _codeLengthTree.GetCode(bit);
+        
+        break; case Litlen:
+          return _litlenTree.GetCode(bit);
+        
+        break; case Distance:
+          return _distTree.GetCode(bit);
+      }
 
-    // the array length has to be 30 or _StopDistanceCode
-    void SetDist(uint8_t *distBitCount){
-      _distTree.SetCode(distBitCount, _StopDistanceCode);
-    }
-
-    const tree::leaf* GetLeafCodeLength(bool bit){
-      return _codeLengthTree.GetCode(bit);
-    }
-
-    const tree::leaf* GetLeafLitLen(bool bit){
-      return _litlenTree.GetCode(bit);
-    }
-
-    const tree::leaf* GetLeafDist(bool bit){
-      return _distTree.GetCode(bit);
+      return NULL;
     }
 
     // this will iterate each leaf using bits supplied
     // -- first pair --
-    // return value >= 0, means the CodeLength (val+1)
-    // return 0, if still needs to be iterated
+    // return value > 0, means the CodeLength/Literal/Distance (val+1)
+    // return 0, if still needs to be supplied
     // return value < 0, means the length -(val)
     // -- second pair --
     // return how many extra bits
-    pair<int16_t, uint8_t> GetCodeLength(bool bit){
-      const tree::leaf* targetLeaf = GetLeafCodeLength(bit);
+    pair<int16_t, uint8_t> GetCode(bool bit, TreeType type){
+      const tree::leaf* targetLeaf = GetLeaf(bit, type);
       if(targetLeaf != NULL){
-        if(targetLeaf->codenum >= _StartCodeLengthCode)
-          return pair<int16_t, uint8_t>{-targetLeaf->codenum, _codeLengthCode[targetLeaf->codenum-_StartCodeLengthCode].second};
+        switch(type){
+          break; case CodeLength:
+            if(targetLeaf->codenum >= _StartCodeLengthCode)
+              return pair<int16_t, uint8_t>{-targetLeaf->codenum, _codeLengthCode[targetLeaf->codenum-_StartCodeLengthCode].second};
 
-        return pair<int16_t, uint8_t>{targetLeaf->codenum+1, 0};
-      }
+          break; case Litlen:
+            if(targetLeaf->codenum >= _StartLengthCode){
+              uint16_t code = targetLeaf->codenum;
+              uint8_t extrabits = _StaticHuffmanTree.GetLengthExtraBits(code);
+              return pair<int16_t, uint8_t>{-code, extrabits};
+            }
 
-      return pair<int16_t, uint8_t>{};
-    }
-
-    // this will iterate each leaf using bits supplied
-    // -- first pair --
-    // return >= 0, means the literal (val+1)
-    // return 0, if still needs to be iterated
-    // returm < 0, means the length -(val)
-    // -- second pair --
-    // return how many -extra bits
-    pair<int16_t, uint8_t> GetLitLen(bool bit){
-      const tree::leaf* targetLeaf = GetLeafLitLen(bit);
-      if(targetLeaf != NULL){
-        if(targetLeaf->codenum >= _StartLengthCode){
-          uint16_t code = targetLeaf->codenum;
-          uint8_t extrabits = _StaticHuffmanTree.GetLengthExtraBits(code);
-          return pair<int16_t, uint8_t>{-code, extrabits};
+          break; case Distance:
+            return pair<int16_t, uint8_t>{targetLeaf->codenum+1, _StaticHuffmanTree.GetDistanceExtraBits(targetLeaf->codenum)};
         }
 
         return pair<int16_t, uint8_t>{targetLeaf->codenum+1, 0};
@@ -401,28 +429,13 @@ class HuffmanTree{
       return pair<int16_t, uint8_t>{0,0};
     }
 
-    // this will iterate each leaf using bits supplied
-    // -- first pair --
-    // return the distance code (val+1)
-    // return 0, if still needs to be iterated
-    // -- second pair --
-    // return how many extra bits
-    pair<int16_t, uint8_t> GetDist(bool bit){
-      const tree::leaf* targetLeaf = GetLeafDist(bit);
-      if(targetLeaf != NULL)
-        return pair<int16_t, uint8_t>{targetLeaf->codenum, _StaticHuffmanTree.GetLengthExtraBits(targetLeaf->codenum+1)};
-
-      return pair<int16_t, uint8_t>{};
-    }
-
     // return the actual length based on the code
     uint16_t GetExtraCodeLength(uint16_t code, uint8_t extraBits){
-      if(code >= _StartCodeLengthCode && code < _StopCodeLengthCode){
-        code -= _StartCodeLengthCode;
-        return _codeLengthCode[code].first + (extraBits & (0xff >> 8-_codeLengthCode[code].second));
-      }
+      if(code < _StartCodeLengthCode || code >= _StopCodeLengthCode)
+        return 0;
 
-      return 0;
+      code -= _StartCodeLengthCode;
+      return _codeLengthCode[code].first + (extraBits & (0xff >> 8-_codeLengthCode[code].second));
     }
 
     // return full length or distance based on the code
@@ -433,6 +446,7 @@ class HuffmanTree{
 
 
 pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, int compressionType){
+  PRINTLOG("\nStart deflating compressed data.")
   const int SlidingWindowSize = __slidingWindowSizeArr[compressionType];
 
   const int reserveStorage = 256;
@@ -443,10 +457,9 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
   size_t offsetbits = 0;
   while(keepLooping){
     keepLooping = !algorithm_GetBit(data[offsetbits/8], 0);
-    cout << "Keeplooping " << keepLooping << endl;
+    PRINTLOG("\nIs last block on the stream: %s\n", keepLooping? "FALSE": "TRUE");
 
     uint8_t HuffmanCodingType = (data[offsetbits/8] >> 1) & 0b11;
-    cout << "HuffmanCodingType: " << (int)HuffmanCodingType << endl;
     offsetbits += 3;
 
     switch(HuffmanCodingType){
@@ -455,28 +468,30 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
         // skipping some bits
         offsetbits = offsetbits+(8-(offsetbits%8));
         uint16_t len = *reinterpret_cast<uint16_t*>(data+(offsetbits/8));
+        PRINTLOG("\nNo Compression block,\nBlock size: %d\n", len);
         
         // also skipping nlen
         offsetbits += sizeof(uint16_t)*8*2;
+
         actualResultLength += len;
         if(actualResultLength >= currentResultLength)
           result = (char*)realloc(result, ((actualResultLength/reserveStorage)+1)*reserveStorage);
 
         memcpy(result+(actualResultLength-len), data+(offsetbits/8), len);
         offsetbits += len*8;
-        cout << "actualResultLength: " << actualResultLength << endl;
-        cout << "offsetbits: " << offsetbits << endl;
       }
 
       // fixed Huffman coding
       break; case 0b01:{
+        PRINTLOG("\nStatic Huffman coding,");
         while(true){
-          cout << "offset: " << offsetbits << endl;
+          PRINTLOG("\nStarting index bit in byte 0x%X: %d\n", offsetbits/8, offsetbits%8);
+
           uint16_t bitsBetweenOffset = algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 16);
           auto res = _StaticHuffmanTree.GetLeaf(bitsBetweenOffset);
           offsetbits += res.second;
 
-          cout << "code: " << hex << bitsBetweenOffset << dec << endl;
+          PRINTLOG("\nUsing codewords: 0x%X, with bit length: %d\n", bitsBetweenOffset, res.second);
           
           // value is literal
           if(res.first >= 0){
@@ -486,13 +501,12 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
               result = (char*)realloc(result, sizeof(char) * currentResultLength);
             }
 
-            cout << "literal: " << (res.first & 0xff) << endl;
+            PRINTLOG("\tUsing literal: %d\n", res.first & 0xff);
           }
 
           // end of block
           else if(res.first == -1){
-            cout << "end of block" << endl;
-            offsetbits += res.second;
+            PRINTLOG("\tEnd of the block");
             break;
           }
           
@@ -500,7 +514,7 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
           else{
             uint16_t length, distance;
             uint16_t lengthcode = -2-res.first;
-            cout << lengthcode << endl;
+            PRINTLOG("\tUsing length code: %d\n", lengthcode);
             
             uint8_t extrabitscount = _StaticHuffmanTree.GetLengthExtraBits(lengthcode);
             length = _StaticHuffmanTree.GetExtra(lengthcode,
@@ -511,7 +525,8 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
             offsetbits += extrabitscount;
             uint8_t distancecode = algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 5);
 
-            cout << (int)distancecode << endl;
+            PRINTLOG("\tProcessed length: %d, extrabits: %d\n", length, extrabitscount);
+            PRINTLOG("\tUsing distance code: %d\n", distancecode);
 
             offsetbits += 5;
             extrabitscount = _StaticHuffmanTree.GetDistanceExtraBits(distancecode);
@@ -522,13 +537,14 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
 
             offsetbits += extrabitscount;
 
-            cout << "length: " << length << " distance: " << distance << endl;
+            PRINTLOG("\tProcessed distance: %d, extrabits: %d\n", distance, extrabitscount);
+
             // copying using length and distance
             for(int i_l = 0; i_l < length; i_l++){
               result[actualResultLength] = result[actualResultLength-distance];
 
               actualResultLength++;
-              if(actualResultLength >= currentResultLength-1){
+              if(actualResultLength >= currentResultLength){
                 currentResultLength += reserveStorage;
                 result = (char*)realloc(result, sizeof(char) * currentResultLength);
               }
@@ -539,14 +555,20 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
 
       // dynamic Huffman coding
       break; case 0b10:{
-        uint16_t litlenmax = algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 5), 5);
-        offsetbits += 5;
+        PRINTLOG("\nDynamic Huffman coding,\n");
 
-        uint16_t distmax = algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 5), 5);
+        uint16_t litlenmax = algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 5), 5) + _StartLengthCode;
         offsetbits += 5;
+        PRINTLOG("Litlen maximum code: %d\n", litlenmax);
+
+        uint16_t distmax = algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 5), 5) + 1;
+        offsetbits += 5;
+        PRINTLOG("Distance maximum code: %d\n", distmax);
 
         uint16_t numofcodelen = algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, 4), 4) + 4;
         offsetbits += 4;
+        PRINTLOG("Code length maximum code: %d\n\n", numofcodelen);
+
 
         const uint8_t __ReorderedIndex[] {
           16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15
@@ -559,44 +581,146 @@ pair<char*, size_t> algorithm_DEFLATE_decompress(char *data, size_t datasize, in
         }
 
         HuffmanTree ht{};
-        ht.SetCodeLength(codeLengthArr);
+        ht.SetCode(codeLengthArr, HuffmanTree::TreeType::CodeLength);
+        free(codeLengthArr);
 
         size_t maxoffsetbits = datasize*8;
 
-        // code length parts
-        // change here
         uint8_t *litlenArr = (uint8_t*)calloc(_StopLengthCode, 1);
-        uint16_t offsetlitlen = 0;
-        while(offsetbits < maxoffsetbits){
-          bool currentBit = algorithm_GetBitR(data[offsetbits/8], offsetbits%8);
-          auto currentPair = ht.GetCodeLength(currentBit);
-          if(currentPair.first != 0){
-            if(currentPair.first > 0){
-              uint16_t val = currentPair.first-1;
-              litlenArr[offsetlitlen++] = val;
-            }
-            else{
-              uint16_t val = -currentPair.first;
-              uint8_t extrabits = currentPair.second;
-              uint16_t length = ht.GetExtraCodeLength(val,
-                algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, extrabits), extrabits)
-              );
+        uint8_t *distArr = (uint8_t*)calloc(_StopDistanceCode, 1);
+        uint8_t *byteArrays[]{litlenArr, distArr};
 
-              uint8_t copyCode = val == 16? litlenArr[offsetlitlen-1]: 0;
-              
-              for(int i = 0; i < length; i++)
-                litlenArr[offsetlitlen++] = copyCode;
+        uint16_t offsets[]{0,0};
+        uint16_t offsetsMax[]{litlenmax, distmax};
+
+        static HuffmanTree::TreeType treetypesSet[]{
+          HuffmanTree::TreeType::Litlen,
+          HuffmanTree::TreeType::Distance
+        },
+        
+        treetypesGet[]{
+          HuffmanTree::TreeType::CodeLength,
+          HuffmanTree::TreeType::CodeLength,
+          HuffmanTree::TreeType::Litlen
+        };
+
+        #ifdef DO_LOG
+        const char *_promptstr[]{
+          "Getting litlen codewords...",
+          "Getting distance codewords...",
+          "Decoding literals..."
+        };
+        #endif
+
+        PRINTLOG("\nDecoding Litlen and Dist, and getting literals...");
+
+        // getting the litlen codes
+        for(int i = 0; i < 3; i++){
+          PRINTLOG("\n%s\nStarting at index 0x%X, bitoffset %d: ", _promptstr[i], offsetbits/8, offsetbits%8);
+          while(offsetbits < maxoffsetbits && (treetypesGet[i] == HuffmanTree::Litlen || offsets[i] < offsetsMax[i])){
+            bool currentBit = algorithm_GetBit(data[(offsetbits)/8], (offsetbits
+            )%8);
+            PRINTLOG("%s", currentBit? "1": "0");
+            
+            offsetbits++;
+            auto currentPair = ht.GetCode(currentBit, treetypesGet[i]);
+            if(currentPair.first != 0){
+              PRINTLOG("\n\tCodeword found, value: %d\n", currentPair.first-1);
+
+              if(currentPair.first > 0){
+                if(treetypesGet[i] == HuffmanTree::Litlen){
+                  // end of block
+                  if((currentPair.first-1) == 256){
+                    PRINTLOG("\tEnd of block\n");
+                    break;
+                  }
+
+                  PRINTLOG("\tIs literal, value: %d, in index: %d\n", currentPair.first-1, actualResultLength);
+                  result[actualResultLength++] = currentPair.first-1;
+
+                  if(actualResultLength >= currentResultLength){
+                    currentResultLength += reserveStorage;
+                    result = (char*)realloc(result, sizeof(char) * currentResultLength);
+                  }
+                }
+                else{
+                  uint16_t val = currentPair.first-1;
+
+                  PRINTLOG("\tCode %d has codewords length: %d\n", offsets[i], val);
+                  byteArrays[i][offsets[i]++] = val;
+                }
+              }
+              else{
+                if(treetypesGet[i] == HuffmanTree::Litlen){
+                  uint16_t length, distance;
+                  length = ht.GetExtraLenDist(-(currentPair.first), 
+                    algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, currentPair.second), currentPair.second)
+                  );
+                  PRINTLOG("\tIs literal length,\n\tLength: %d, extrabitscount: %d\n", length, currentPair.second);
+
+                  offsetbits += currentPair.second;
+                  
+                  pair<int16_t, uint8_t> distancePair{};
+                  while(offsetbits < maxoffsetbits && (distancePair = ht.GetCode(algorithm_GetBit(data[offsetbits/8], offsetbits%8), HuffmanTree::Distance)).first == 0)
+                    offsetbits++;
+
+                  offsetbits++;
+
+                  distance = ht.GetExtraLenDist(distancePair.first-1,
+                    algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, distancePair.second), distancePair.second)
+                  );
+                  PRINTLOG("\tDistance: %d, extrabitscount: %d\n", distance, distancePair.second);
+                  
+                  offsetbits += distancePair.second;
+
+                  PRINTLOG("\tCopied content (in hex) from 0x%X: \n", actualResultLength);
+                  // copying using length and distance
+                  for(int i_l = 0; i_l < length; i_l++){
+                    result[actualResultLength] = result[actualResultLength-distance];
+                    if(i_l % 16)
+                      PRINTLOG("\n\t\t");
+                      
+                    PRINTLOG("%X ", result[actualResultLength]);
+
+                    actualResultLength++;
+                    if(actualResultLength >= currentResultLength){
+                      currentResultLength += reserveStorage;
+                      result = (char*)realloc(result, sizeof(char) * currentResultLength);
+                    }
+                  }
+
+                  PRINTLOG("\n\tEnded at index 0x%X\n", actualResultLength);
+                }
+                else{
+                  uint16_t val = -currentPair.first;
+                  uint8_t extrabits = currentPair.second;
+                  uint16_t length = ht.GetExtraCodeLength(val,
+                    algorithm_ReverseBits(algorithm_GetBitsBetweenR(data+(offsetbits/8), offsetbits%8, extrabits), extrabits)
+                  );
+
+                  offsetbits += extrabits;
+
+                  uint8_t copyCode = val == 16? byteArrays[i][offsets[i]-1]: 0;
+
+                  PRINTLOG("\tLength: %d, extrabitscount: %d\n\tCopyCode: %d\n", length, extrabits, copyCode);
+                  
+                  for(int i_count = 0; i_count < length && offsets[i] < offsetsMax[i]; i_count++)
+                    byteArrays[i][offsets[i]++] = copyCode;
+                }
+              }
+
+              PRINTLOG("\n");
             }
           }
 
-          offsetbits++;
-        }
-        
-        while(offsetbits < maxoffsetbits){
-          bool currentBi 
+          if(i < (sizeof(treetypesSet)/sizeof(treetypesSet[0]))){
+            ht.SetCode(byteArrays[i], treetypesSet[i]);
+            PRINTLOG("\n");
+          }
         }
 
-        free(codeLengthArr);
+        free(litlenArr);
+        free(distArr);
       }
       
       //reserved
